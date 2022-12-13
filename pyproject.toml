@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pydoor"
+version = "0.0.1"
+dependencies = [
+    "gpiozero"
+]
+
+[project.scripts]
+pydoor = "pydoor.pydoor:main"
