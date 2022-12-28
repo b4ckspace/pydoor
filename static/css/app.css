@@ -1,0 +1,107 @@
+body {
+    background-color: #fff;
+    font-family: 'Open Sans', arial, sans-serif;
+}
+
+a, a:active, a:visited, a:hover {
+    color: #000;
+}
+
+.logo {
+    width: 95%;
+}
+
+.logo-door {
+    width: 23%;
+    margin: 20px 0 12px 0;
+}
+
+.container {
+    text-align: center;
+    margin:0 auto;
+    max-width: 400px;
+
+    margin-top: 26px;
+}
+
+hr {
+    -moz-border-bottom-colors: none;
+    -moz-border-image: none;
+    -moz-border-left-colors: none;
+    -moz-border-right-colors: none;
+    -moz-border-top-colors: none;
+    -moz-use-text-color: #FFFFFF;
+
+    border-color: #EEEEEE;
+    border-style: solid none;
+    border-width: 1px 0;
+    margin: 30px 0;
+}
+
+.button {
+    display: block;
+    text-decoration: none;
+    font-size: 20px;
+}
+
+select, input, .button {
+    border: 1px solid #2462aa;
+    border-radius: 5px;
+    padding: 15px 10px;
+
+    background-color: #fff;
+
+    -webkit-box-sizing: border-box; /* Safari/Chrome, other WebKit */
+    -moz-box-sizing: border-box;    /* Firefox, other Gecko */
+    box-sizing: border-box;         /* Opera/IE 8+ */
+}
+
+#users, #password {
+    width: 100%;
+    display: block;
+
+    margin: 30px 0;
+}
+
+#users {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    text-indent: 1px;
+    text-overflow: "";
+}
+
+.type {
+    width: 49%;
+    font-size: 20px;
+}
+
+.type[value=Open] {
+    float: right;
+    color: #fff;
+    background-color: #2462aa;
+}
+
+.type[value=Close] {
+    float: left;
+    color: #000;
+}
+
+
+.message.error h3 {
+    color: #e74c3c;
+}
+
+.message.success h3 {
+    color: #1abc9c;
+}
+
+.message h3 {
+    font-weight: bold;
+    font-size: 20px;
+
+    margin: 20px 0;
+}
+
+.message p {
+    font-size: 14px;
+}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Backspace Door</title>
+
+    <link rel="stylesheet" href="/css/app.css" />
+    <meta name="viewport" content="width=device-width">
+</head>
+<body>
+    <div class="container">
+        <img src="/img/backspace.svg" alt="backspace e.V." class="logo">
+        <img src="/img/door.svg" alt="door" class="logo-door">
+
+        <form id="loginform" action="/operate" method="POST">
+            <input type="text" name="uid" id="users" placeholder="User" required>
+
+            <input type="password" name="password" id="password" placeholder="Password" required>
+
+            <hr>
+
+            <div>
+                <input type="submit" name="type" value="Open" class="type">
+                <input type="submit" name="type" value="Close" class="type">
+            </div>
+        </form>
+    </div>
+
+    <script type="text/javascript" src="/js/app.js"></script>
+</body>
+</html>
