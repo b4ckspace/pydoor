@@ -62,24 +62,24 @@ class DoorState:
         self._gpio2 = DigitalOutputDevice(24, active_high=False, initial_value=False)
         self._buzzer = DigitalOutputDevice(25, active_high=True, initial_value=False)
         self._command_queue = queue.SimpleQueue()
-        self._current_state = 'unknown'
 
     def run_forever(self):
         is_running = True
-        next_state = None
+        next_operation = None
         while is_running:
             command = self._command_queue.get()
             if command.operation == DoorOperations.STOP:
                 is_running = False
             elif command.operation in (DoorOperations.LOCK, DoorOperations.UNLOCK):
                 self._log_command(command)
-                next_state = command.operation
+                next_operation = command.operation
             else:
                 logger.warning(f'PROGRAMMING ERROR: Invalid command: {command}')
-            if self._command_queue.empty() and next_state is not None:
-                self._apply_state(next_state)
+            if self._command_queue.empty() and next_operation is not None:
+                self._apply_operation(next_operation)
+                next_operation = None
 
-    def _apply_state(self, next_state):
+    def _apply_operation(self, next_state):
         if next_state == DoorOperations.UNLOCK:
             self._unlock_door()
         elif next_state == DoorOperations.LOCK:
@@ -105,13 +105,11 @@ class DoorState:
         self._gpio1.off()
         time.sleep(5)
         self._buzzer.off()
-        self._current_state = 'unlocked'
 
     def _lock_door(self):
         self._gpio2.on()
         time.sleep(0.2)
         self._gpio2.off()
-        self._current_state = 'locked'
 
     def _log_command(self, command):
         who = command.args.get('who')
