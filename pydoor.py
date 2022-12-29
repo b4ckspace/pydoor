@@ -1,97 +1,28 @@
-import asyncio
-import base64
-import binascii
-import hashlib
-import hmac
 import logging
-import os
-import ssl
-import time
-import re
-from urllib.parse import parse_qs
 
-from ldap3 import Server, Connection, Tls, ALL
-from ldap3.core.exceptions import LDAPSocketOpenError, LDAPException
+from doorapp import DoorApp
 from flask import Flask, redirect, request
-from gpiozero import DigitalOutputDevice
-
-
-LDAP_HOST = 'ldap://10.1.20.13:389'
-LDAP_USER_DN = 'ou=member,dc=backspace'
-LDAP_ADMIN_DN = 'cn=reader,ou=ldapuser,dc=backspace'
-LDAP_ADMIN_PASSWORD = os.environ.get('LDAP_PASS')
-
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
-gpio1 = DigitalOutputDevice(23, active_high=False, initial_value=False)
-gpio2 = DigitalOutputDevice(24, active_high=False, initial_value=False)
-summer = DigitalOutputDevice(25, active_high=True, initial_value=False)
+door_app = DoorApp()
+door_app.start()
 
 
-def check_password(username, password):
-    try:
-        return _check_password_interal(username, password)
-    except LDAPException as e:
-        logger.warning(f'Unexpected LDAP error: {e}')
-    return False
-
-
-def _check_password_interal(username, password):
-    if not re.match('^[a-zA-Z0-9._-]+$', username):
-        return False
-    tls_config = Tls(validate=ssl.CERT_NONE)
-    server = Server(LDAP_HOST, tls=tls_config)
-    with Connection(server, LDAP_ADMIN_DN, LDAP_ADMIN_PASSWORD) as conn:
-        conn.start_tls()
-        conn.bind()
-        result = conn.search(
-                LDAP_USER_DN,
-                f'(&(objectClass=backspaceMember)(serviceEnabled=door)(uid={username}))',
-                attributes=['uid', 'doorPassword']
-        )
-        if not result:
-            return False
-        entry = conn.entries[0]
-        if not entry.doorPassword:
-            return False
-        door_password = str(entry.doorPassword)
-        if not door_password.startswith('{SSHA512}'):
-            logger.warning('Invalid doorPassword: Must start with {SSHA512}.')
-            return False
-        door_password = door_password.removeprefix('{SSHA512}')
-        try:
-            door_password_bytes = base64.b64decode(door_password)
-        except ValueError:
-            logger.warning('Invalid base64 in doorPassword')
-            return False
-        sha512_raw = door_password_bytes[:64]
-        salt_raw = door_password_bytes[64:]
-        user_hash = hashlib.sha512(password.encode('utf-8') + salt_raw).digest()
-    return hmac.compare_digest(user_hash, sha512_raw)
-
-
-@app.route("/operate", methods=["POST"])
+@app.route('/operate', methods=['POST'])
 def operate():
-    if not check_password(request.form["uid"], request.form["password"]):
+    uid = request.form.get('uid', '')
+    password = request.form.get('password', '')
+    if not door_app.authenticator.check_credentials(uid, password):
         return redirect("/unauthorized.html")
 
-    if request.form["type"].lower() == "open":
-        summer.on()
-        gpio1.on()
-        time.sleep(0.2)
-        gpio1.off()
-        time.sleep(5)
-        summer.off()
-
-        return redirect("/opened.html")
-
-    if request.form["type"].lower() == "close":
-        gpio2.on()
-        time.sleep(0.2)
-        gpio2.off()
-
-        return redirect("/closed.html")
+    action = request.form.get('type', '').lower()
+    if action == 'open':
+        door_app.door_state.unlock(uid)
+        return redirect('/opened.html')
+    elif action == 'close':
+        door_app.door_state.lock(uid)
+        return redirect('/closed.html')
 
 
 def main():
