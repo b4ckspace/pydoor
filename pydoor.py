@@ -5,23 +5,29 @@ import configparser
 import hashlib
 import hmac
 import logging
+import os
 import ssl
+import time
 import re
 from urllib.parse import parse_qs
 
 from ldap3 import Server, Connection, Tls, ALL
 from ldap3.core.exceptions import LDAPSocketOpenError, LDAPException
 from flask import Flask, redirect, request
+from gpiozero import DigitalOutputDevice
 
 
 LDAP_HOST = 'ldap://10.1.20.13:389'
 LDAP_USER_DN = 'ou=member,dc=backspace'
 LDAP_ADMIN_DN = 'cn=reader,ou=ldapuser,dc=backspace'
-LDAP_ADMIN_PASSWORD = ''
+LDAP_ADMIN_PASSWORD = os.environ.get('LDAP_PASS')
 
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
+gpio1 = DigitalOutputDevice(23, active_high=False, initial_value=False)
+gpio2 = DigitalOutputDevice(24, active_high=False, initial_value=False)
+summer = DigitalOutputDevice(25, active_high=True, initial_value=False)
 
 
 def check_password(username, password):
@@ -71,10 +77,21 @@ def operate():
     if not check_password(request.form["uid"], request.form["password"]):
         return redirect("/unauthorized.html")
 
-    if lower(request.form["type"]) == "open":
+    if request.form["type"].lower() == "open":
+        summer.on()
+        gpio1.on()
+        time.sleep(0.2)
+        gpio1.off()
+        time.sleep(5)
+        summer.off()
+
         return redirect("/opened.html")
 
-    if lower(request.form["type"]) == "close":
+    if request.form["type"].lower() == "close":
+        gpio2.on()
+        time.sleep(0.2)
+        gpio2.off()
+
         return redirect("/closed.html")
 
 
