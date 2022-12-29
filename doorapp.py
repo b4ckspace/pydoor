@@ -45,10 +45,13 @@ class DoorOperations(enum.Enum):
     STOP = 1
     LOCK = 2
     UNLOCK = 3
+    LOCK_SHUTDOWN = 4
 
 
 class DoorCommand:
-    def __init__(self, operation, args):
+    def __init__(self, operation, args=None):
+        if args is None:
+            args = {}
         self.operation = operation
         self.args = args
 
@@ -58,10 +61,35 @@ class DoorCommand:
 
 class DoorState:
     def __init__(self):
+        self._next_door_close_shutdown = False
         self._gpio1 = DigitalOutputDevice(23, active_high=False, initial_value=False)
         self._gpio2 = DigitalOutputDevice(24, active_high=False, initial_value=False)
         self._buzzer = DigitalOutputDevice(25, active_high=True, initial_value=False)
+        self._button = Button(17, pull_up=False, bounce_time=0.1)
+        self._door_frame = Button(22, pull_up=False, bounce_time=0.1)
+        self._door_bolt = Button(27, pull_up=False, bounce_time=0.1)
         self._command_queue = queue.SimpleQueue()
+        self._button.when_pressed = self._button_pressed
+        self._door_frame.when_pressed = self._door_opened
+        self._door_frame.when_released = self._door_closed
+        self._door_bolt.when_pressed = self._door_unlocked
+        self._door_bolt.when_released = self._door_locked
+
+    @property
+    def is_open(self):
+        return self._door_frame.is_pressed
+
+    @property
+    def is_closed(self):
+        return not self._door_frame.is_pressed
+
+    @property
+    def is_locked(self):
+        return not self._door_bolt.is_pressed
+
+    @property
+    def is_unlocked(self):
+        return self._door_bolt.is_pressed
 
     def run_forever(self):
         is_running = True
@@ -73,6 +101,9 @@ class DoorState:
             elif command.operation in (DoorOperations.LOCK, DoorOperations.UNLOCK):
                 self._log_command(command)
                 next_operation = command.operation
+            elif command.operation == DoorOperations.LOCK_SHUTDOWN:
+                self._log_command(command)
+                self._lock_shutdown()
             else:
                 logger.warning(f'PROGRAMMING ERROR: Invalid command: {command}')
             if self._command_queue.empty() and next_operation is not None:
@@ -89,6 +120,9 @@ class DoorState:
         self._command_queue.put(DoorCommand(DoorOperations.LOCK, {
             'who': who
         }))
+
+    def lock_shutdown(self):
+        self._command_queue.put(DoorCommand(DoorOperations.LOCK_SHUTDOWN))
 
     def unlock(self, who=None):
         self._command_queue.put(DoorCommand(DoorOperations.UNLOCK, {
@@ -107,9 +141,39 @@ class DoorState:
         self._buzzer.off()
 
     def _lock_door(self):
+        if self.is_open:
+            return
         self._gpio2.on()
         time.sleep(0.2)
         self._gpio2.off()
+
+    def _lock_shutdown(self):
+        time.sleep(3)
+        # not is_pressed means door is closed.
+        if self.is_closed:
+            self._lock_door()
+
+    def _button_pressed(self):
+        print('Button was pressed', file=sys.stderr)
+        if self.is_unlocked:
+            self._next_door_close_shutdown = True
+        else:
+            self.unlock()
+
+    def _door_opened(self):
+        print('Door opened', file=sys.stderr)
+
+    def _door_closed(self):
+        print('Door closed', file=sys.stderr)
+        if self._next_door_close_shutdown:
+            self._next_door_close_shutdown = False
+            self.lock_shutdown()
+
+    def _door_locked(self):
+        print('Door locked', file=sys.stderr)
+
+    def _door_unlocked(self):
+        print('Door unlocked', file=sys.stderr)
 
     def _log_command(self, command):
         who = command.args.get('who')
