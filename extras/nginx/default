@@ -1,0 +1,32 @@
+server {
+	listen 80 default_server;
+	listen [::]:80 default_server;
+
+	server_name _;
+
+	return 302 https://$host$request_uri;
+}
+
+server {
+	listen 443 ssl default_server;
+	listen [::]:443 ssl default_server;
+
+	ssl_certificate /etc/letsencrypt/live/door.bckspc.de/fullchain.pem;
+	ssl_certificate_key /etc/letsencrypt/live/door.bckspc.de/privkey.pem;
+
+	root /opt/pydoor/static;
+
+	index index.html;
+
+	server_name _;
+
+	location / {
+		# First attempt to serve request as file, then
+		# as directory, then fall back to displaying a 404.
+		try_files $uri $uri/ @proxy;
+	}
+
+	location @proxy {
+		proxy_pass http://127.0.0.1:8195;
+	}
+}
