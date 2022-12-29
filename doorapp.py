@@ -16,6 +16,7 @@ from datetime import datetime
 from gpiozero import DigitalOutputDevice, Button
 from ldap3 import Server, Connection, Tls
 from ldap3.core.exceptions import LDAPException
+import paho.mqtt.client as mqtt
 
 
 logger = logging.getLogger(__name__)
@@ -29,16 +30,22 @@ class DoorApp:
             os.environ.get('PYDOOR_LDAP_PASSWORD', ''),
             os.environ.get('PYDOOR_LDAP_SEARCH', 'ou=member,dc=backspace')
         )
-        self.door_state = DoorState()
+        mqtt_queue = queue.SimpleQueue()
+        self._mqtt_sender = MqttSender(os.environ.get('PYDOOR_MQTT_HOST', 'mqtt.core.bckspc.de'), mqtt_queue)
+        self._mqtt_sender_thread = threading.Thread(target=self._mqtt_sender.run_forever)
+        self.door_state = DoorState(mqtt_queue)
         self._door_state_thread = threading.Thread(target=self.door_state.run_forever)
 
     def start(self):
+        self._mqtt_sender_thread.start()
         self._door_state_thread.start()
         signal.signal(signal.SIGTERM, self._shutdown)
 
     def _shutdown(self, signo, sigframe):
         self.door_state.stop()
         self._door_state_thread.join()
+        self._mqtt_sender.stop()
+        self._mqtt_sender_thread.join()
 
 
 class DoorOperations(enum.Enum):
@@ -48,7 +55,7 @@ class DoorOperations(enum.Enum):
     LOCK_SHUTDOWN = 4
 
 
-class DoorCommand:
+class QueueCommand:
     def __init__(self, operation, args=None):
         if args is None:
             args = {}
@@ -60,7 +67,8 @@ class DoorCommand:
 
 
 class DoorState:
-    def __init__(self):
+    def __init__(self, mqtt_queue):
+        self._mqtt_queue = mqtt_queue
         self._next_door_close_shutdown = False
         self._gpio1 = DigitalOutputDevice(23, active_high=False, initial_value=False)
         self._gpio2 = DigitalOutputDevice(24, active_high=False, initial_value=False)
@@ -70,6 +78,7 @@ class DoorState:
         self._door_bolt = Button(27, pull_up=False, bounce_time=0.1)
         self._command_queue = queue.SimpleQueue()
         self._button.when_pressed = self._button_pressed
+        self._button.when_released = self._button_released
         self._door_frame.when_pressed = self._door_opened
         self._door_frame.when_released = self._door_closed
         self._door_bolt.when_pressed = self._door_unlocked
@@ -117,20 +126,23 @@ class DoorState:
             self._lock_door()
 
     def lock(self, who=None):
-        self._command_queue.put(DoorCommand(DoorOperations.LOCK, {
+        self._command_queue.put(QueueCommand(DoorOperations.LOCK, {
             'who': who
         }))
 
     def lock_shutdown(self):
-        self._command_queue.put(DoorCommand(DoorOperations.LOCK_SHUTDOWN))
+        self._command_queue.put(QueueCommand(DoorOperations.LOCK_SHUTDOWN))
 
     def unlock(self, who=None):
-        self._command_queue.put(DoorCommand(DoorOperations.UNLOCK, {
+        self._command_queue.put(QueueCommand(DoorOperations.UNLOCK, {
             'who': who
         }))
 
     def stop(self):
-        self._command_queue.put(DoorCommand(DoorOperations.STOP, {}))
+        self._command_queue.put(QueueCommand(DoorOperations.STOP, {}))
+
+    def _send_mqtt(self, topic, message):
+        self._mqtt_queue.put((topic, message))
 
     def _unlock_door(self):
         self._buzzer.on()
@@ -149,31 +161,40 @@ class DoorState:
 
     def _lock_shutdown(self):
         time.sleep(3)
-        # not is_pressed means door is closed.
         if self.is_closed:
             self._lock_door()
 
     def _button_pressed(self):
         print('Button was pressed', file=sys.stderr)
+        self._send_mqtt('sensor/door/button', 'pressed')
         if self.is_unlocked:
             self._next_door_close_shutdown = True
         else:
             self.unlock()
 
+    def _button_released(self):
+        print('Button was released', file=sys.stderr)
+        self._send_mqtt('sensor/door/button', 'released')
+
     def _door_opened(self):
         print('Door opened', file=sys.stderr)
+        self._next_door_close_shutdown = False
+        self._send_mqtt('sensor/door/frame', 'open')
 
     def _door_closed(self):
         print('Door closed', file=sys.stderr)
+        self._send_mqtt('sensor/door/frame', 'closed')
         if self._next_door_close_shutdown:
             self._next_door_close_shutdown = False
             self.lock_shutdown()
 
     def _door_locked(self):
         print('Door locked', file=sys.stderr)
+        self._send_mqtt('sensor/door/lock', 'closed')
 
     def _door_unlocked(self):
         print('Door unlocked', file=sys.stderr)
+        self._send_mqtt('sensor/door/lock', 'open')
 
     def _log_command(self, command):
         who = command.args.get('who')
@@ -230,3 +251,27 @@ class LdapAuthenticator:
         salt_raw = password_hash_bytes[64:]
         user_hash = hashlib.sha512(password.encode('utf-8') + salt_raw).digest()
         return hmac.compare_digest(user_hash, sha512_raw)
+
+
+class MqttOperation(enum.Enum):
+    STOP = 1
+    SEND_MESSAGE = 2
+
+
+class MqttSender:
+    def __init__(self, host, message_queue):
+        self._client = mqtt.Client()
+        self._client.connect(host)
+        self._queue = message_queue
+
+    def run_forever(self):
+        self._client.loop_start()
+        while True:
+            topic, message = self._queue.get()
+            if topic == 'STOP' and message is None:
+                break
+            self._client.publish(topic, message)
+
+    def stop(self):
+        self._queue.put(('STOP', None))
+        self._client.loop_stop()
