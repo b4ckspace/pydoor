@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import binascii
-import configparser
 import hashlib
 import hmac
 import logging
@@ -96,26 +95,6 @@ def operate():
 
 
 def main():
-    config = configparser.ConfigParser()
-
-    config.read("config.ini")
-    config_dict = {}
-
-    for section in config.sections():
-        if "." in section:
-            section_names = section.split(".")
-
-            if section_names[0] not in config_dict:
-                config_dict[section_names[0]] = {
-                        section_names[1]: dict(config[section])
-                }
-            else:
-                config_dict[section_names[0]][section_names[1]] = dict(config[section])
-        else:
-            config_dict[section] = dict(config[section])
-
-    config = config_dict
-
     app.run()
 
 
