@@ -1,19 +1,20 @@
 import logging
 
-from doorapp import DoorApp
+from doorapp import get_door_app_environ
+from authentication import get_authenticator_environ
 from flask import Flask, redirect, request
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
-door_app = DoorApp()
-door_app.start()
+door_app = get_door_app_environ(start=True)
+authenticator = get_authenticator_environ()
 
 
 @app.route('/operate', methods=['POST'])
 def operate():
     uid = request.form.get('uid', '')
     password = request.form.get('password', '')
-    if not door_app.authenticator.check_credentials(uid, password):
+    if not authenticator.check_credentials(uid, password):
         return redirect("/unauthorized.html")
 
     action = request.form.get('type', '').lower()
