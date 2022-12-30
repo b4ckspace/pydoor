@@ -70,35 +70,35 @@ class DoorState:
     def __init__(self, mqtt_queue):
         self._mqtt_queue = mqtt_queue
         self._next_door_close_shutdown = False
-        self._gpio1 = DigitalOutputDevice(23, active_high=False, initial_value=False)
-        self._gpio2 = DigitalOutputDevice(24, active_high=False, initial_value=False)
+        self._gpio_unlock = DigitalOutputDevice(23, active_high=False, initial_value=False)
+        self._gpio_lock = DigitalOutputDevice(24, active_high=False, initial_value=False)
         self._buzzer = DigitalOutputDevice(25, active_high=True, initial_value=False)
-        self._button = Button(17, pull_up=False, bounce_time=0.01)
-        self._door_frame = Button(22, pull_up=False, bounce_time=0.01)
-        self._door_bolt = Button(27, pull_up=False, bounce_time=0.01)
+        self._button = Button(17, pull_up=None, active_state=False, bounce_time=0.01)
+        self._door_frame = Button(22, pull_up=None, active_state=False, bounce_time=0.01)
+        self._door_bolt = Button(27, pull_up=None, active_state=False, bounce_time=0.01)
         self._command_queue = queue.SimpleQueue()
         self._button.when_pressed = self._button_pressed
         self._button.when_released = self._button_released
-        self._door_frame.when_pressed = self._door_opened
-        self._door_frame.when_released = self._door_closed
-        self._door_bolt.when_pressed = self._door_unlocked
-        self._door_bolt.when_released = self._door_locked
+        self._door_frame.when_pressed = self._door_closed
+        self._door_frame.when_released = self._door_opened
+        self._door_bolt.when_pressed = self._door_locked
+        self._door_bolt.when_released = self._door_unlocked
 
     @property
     def is_open(self):
-        return self._door_frame.is_pressed
-
-    @property
-    def is_closed(self):
         return not self._door_frame.is_pressed
 
     @property
+    def is_closed(self):
+        return self._door_frame.is_pressed
+
+    @property
     def is_locked(self):
-        return not self._door_bolt.is_pressed
+        return self._door_bolt.is_pressed
 
     @property
     def is_unlocked(self):
-        return self._door_bolt.is_pressed
+        return not self._door_bolt.is_pressed
 
     def run_forever(self):
         is_running = True
@@ -146,18 +146,18 @@ class DoorState:
 
     def _unlock_door(self):
         self._buzzer.on()
-        self._gpio1.on()
+        self._gpio_unlock.on()
         time.sleep(0.2)
-        self._gpio1.off()
+        self._gpio_unlock.off()
         time.sleep(5)
         self._buzzer.off()
 
     def _lock_door(self):
         if self.is_open:
             return
-        self._gpio2.on()
+        self._gpio_lock.on()
         time.sleep(0.2)
-        self._gpio2.off()
+        self._gpio_lock.off()
 
     def _lock_shutdown(self):
         time.sleep(3)
