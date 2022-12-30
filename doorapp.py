@@ -73,9 +73,9 @@ class DoorState:
         self._gpio1 = DigitalOutputDevice(23, active_high=False, initial_value=False)
         self._gpio2 = DigitalOutputDevice(24, active_high=False, initial_value=False)
         self._buzzer = DigitalOutputDevice(25, active_high=True, initial_value=False)
-        self._button = Button(17, pull_up=False, bounce_time=0.1)
-        self._door_frame = Button(22, pull_up=False, bounce_time=0.1)
-        self._door_bolt = Button(27, pull_up=False, bounce_time=0.1)
+        self._button = Button(17, pull_up=False, bounce_time=0.01)
+        self._door_frame = Button(22, pull_up=False, bounce_time=0.01)
+        self._door_bolt = Button(27, pull_up=False, bounce_time=0.01)
         self._command_queue = queue.SimpleQueue()
         self._button.when_pressed = self._button_pressed
         self._button.when_released = self._button_released
