@@ -73,8 +73,9 @@ class LdapAuthenticator:
         except ValueError:
             logger.warning('Invalid base64 in door password attribute')
             return False
-        hash_raw = password_hash_bytes[:hash_class.digest_size]
-        salt_raw = password_hash_bytes[hash_class.digest_size:]
+        digest_size = hash_class().digest_size
+        hash_raw = password_hash_bytes[:digest_size]
+        salt_raw = password_hash_bytes[digest_size:]
         user_hash = hash_class(password.encode('utf-8') + salt_raw).digest()
         return hmac.compare_digest(user_hash, hash_raw)
 
