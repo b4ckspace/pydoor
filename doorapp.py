@@ -1,3 +1,4 @@
+import dataclasses
 import enum
 import logging
 import os
@@ -28,31 +29,32 @@ class DoorApp:
         self._door_state_thread.start()
         signal.signal(signal.SIGTERM, self._shutdown)
 
-    def _shutdown(self, signo, sigframe):
+    def stop(self):
         self.door_state.stop()
         self._door_state_thread.join()
         self._mqtt_client.loop_stop()
 
+    def _shutdown(self, signo, sigframe):
+        self.stop()
 
-class DoorOperations(enum.Enum):
+
+class DoorOperation(enum.Enum):
     STOP = 1
     LOCK = 2
     UNLOCK = 3
     LOCK_SHUTDOWN = 4
 
 
+@dataclasses.dataclass
 class QueueCommand:
-    def __init__(self, operation, args=None):
-        if args is None:
-            args = {}
-        self.operation = operation
-        self.args = args
-
-    def __repr__(self):
-        return repr(self.__dict__)
+    operation: DoorOperation
+    who: str
+    force: bool
 
 
 class DoorState:
+    BUTTON_SHUTDOWN_LOCK_TIME = 60
+
     def __init__(self, mqtt_client):
         self._mqtt_client = mqtt_client
         self._is_running = False
@@ -87,46 +89,54 @@ class DoorState:
     def is_unlocked(self):
         return not self._door_bolt.is_pressed
 
-    def run_forever(self):
-        self._is_running = True
-        next_operation = None
-        while self._is_running:
-            command = self._command_queue.get()
-            if command.operation == DoorOperations.STOP:
-                self._is_running = False
-            elif command.operation in (DoorOperations.LOCK, DoorOperations.UNLOCK):
-                self._log_command(command)
-                next_operation = command.operation
-            elif command.operation == DoorOperations.LOCK_SHUTDOWN:
-                self._log_command(command)
-                self._lock_shutdown()
-            else:
-                logger.warning(f'PROGRAMMING ERROR: Invalid command: {command}')
-            if self._command_queue.empty() and next_operation is not None:
-                self._apply_operation(next_operation)
-                next_operation = None
-
-    def _apply_operation(self, next_state):
-        if next_state == DoorOperations.UNLOCK:
-            self._unlock_door()
-        elif next_state == DoorOperations.LOCK:
-            self._lock_door()
-
-    def lock(self, who=None):
-        self._command_queue.put(QueueCommand(DoorOperations.LOCK, {
-            'who': who
-        }))
+    def lock(self, who=None, force=False):
+        self._queue_operation(DoorOperation.LOCK, who, force)
 
     def lock_shutdown(self):
-        self._command_queue.put(QueueCommand(DoorOperations.LOCK_SHUTDOWN))
+        self._queue_operation(DoorOperation.LOCK, who=None, force=True)
 
-    def unlock(self, who=None):
-        self._command_queue.put(QueueCommand(DoorOperations.UNLOCK, {
-            'who': who
-        }))
+    def unlock(self, who=None, force=False):
+        self._queue_operation(DoorOperation.UNLOCK, who, force)
 
     def stop(self):
-        self._command_queue.put(QueueCommand(DoorOperations.STOP, {}))
+        self._queue_operation(DoorOperation.STOP, who=None, force=True)
+
+    def run_forever(self):
+        self._is_running = True
+        while self._is_running:
+            operation_fn = self._process_queue()
+            operation_fn()
+
+    def _process_queue(self):
+        """ Processes queue entries for door operations
+
+        This function will *NOT* execute commands immediately, but take the
+        last command in the queue unless the command is forced. This prevents
+        the door executing unnecessary operations for a long time; it does,
+        however, not prevent the same command executed twice in the row when
+        the queue was empty in between. This behavior is intended.
+        :return:
+        """
+        command = self._command_queue.get()
+        operation_fn = {
+            DoorOperation.LOCK: self._lock_door,
+            DoorOperation.UNLOCK: self._unlock_door,
+            DoorOperation.LOCK_SHUTDOWN: self._lock_door_shutdown,
+            DoorOperation.STOP: self._stop
+        }[command.operation]
+        self._log_command(command)
+        if self._command_queue.empty() or command.force:
+            return operation_fn
+        return self._nop
+
+    def _queue_operation(self, operation, who, force):
+        self._command_queue.put(QueueCommand(operation, who, force))
+
+    def _nop(self):
+        pass
+
+    def _stop(self):
+        self._is_running = False
 
     def _unlock_door(self):
         self._buzzer.on()
@@ -143,7 +153,7 @@ class DoorState:
         time.sleep(0.2)
         self._gpio_lock.off()
 
-    def _lock_shutdown(self):
+    def _lock_door_shutdown(self):
         time.sleep(3)
         if self.is_closed:
             self._lock_door()
@@ -152,7 +162,7 @@ class DoorState:
         print('Button was pressed', file=sys.stderr)
         self._mqtt_client.publish('sensor/door/button', 'pressed')
         if self.is_unlocked:
-            self._next_door_close_shutdown = True
+            self._shutdown_timer = time.monotonic()
         else:
             self.unlock()
 
@@ -162,15 +172,16 @@ class DoorState:
 
     def _door_opened(self):
         print('Door opened', file=sys.stderr)
-        self._next_door_close_shutdown = False
         self._mqtt_client.publish('sensor/door/frame', 'open')
 
     def _door_closed(self):
         print('Door closed', file=sys.stderr)
         self._mqtt_client.publish('sensor/door/frame', 'closed')
-        if self._next_door_close_shutdown:
-            self._next_door_close_shutdown = False
-            self.lock_shutdown()
+        if self._shutdown_timer > 0:
+            seconds_passed = time.monotonic() - self._shutdown_timer
+            self._shutdown_timer = 0
+            if seconds_passed <= self.BUTTON_SHUTDOWN_LOCK_TIME:
+                self.lock_shutdown()
 
     def _door_locked(self):
         print('Door locked', file=sys.stderr)
@@ -181,7 +192,7 @@ class DoorState:
         self._mqtt_client.publish('sensor/door/lock', 'open')
 
     def _log_command(self, command):
-        who = command.args.get('who')
+        who = command.who
         now = datetime.utcnow()
         print(f'{now}: {command.operation.name} (user: {who})', file=sys.stderr)
 
