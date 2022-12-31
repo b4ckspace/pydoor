@@ -19,10 +19,10 @@ def operate():
 
     action = request.form.get('type', '').lower()
     if action == 'open':
-        door_app.door_state.unlock(uid)
+        door_app.door_driver.unlock(uid)
         return redirect('/opened.html')
     elif action == 'close':
-        door_app.door_state.lock(uid)
+        door_app.door_driver.lock(uid)
         return redirect('/closed.html')
 
 

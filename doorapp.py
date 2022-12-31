@@ -18,20 +18,20 @@ logger = logging.getLogger(__name__)
 
 class DoorApp:
     def __init__(self, mqtt_host):
-        self._door_state_thread = None
+        self._door_driver_thread = None
         self._mqtt_client = mqtt.Client()
         self._mqtt_client.connect_async(mqtt_host)
-        self.door_state = DoorState(self._mqtt_client)
-        self._door_state_thread = threading.Thread(target=self.door_state.run_forever)
+        self.door_driver = DoorDriver(self._mqtt_client)
 
     def start(self):
         self._mqtt_client.loop_start()
-        self._door_state_thread.start()
+        self._door_driver_thread = threading.Thread(target=self.door_driver.run_forever)
+        self._door_driver_thread.start()
         signal.signal(signal.SIGTERM, self._shutdown)
 
     def stop(self):
-        self.door_state.stop()
-        self._door_state_thread.join()
+        self.door_driver.stop()
+        self._door_driver_thread.join()
         self._mqtt_client.loop_stop()
 
     def _shutdown(self, signo, sigframe):
@@ -52,7 +52,7 @@ class QueueCommand:
     force: bool
 
 
-class DoorState:
+class DoorDriver:
     BUTTON_SHUTDOWN_LOCK_TIME = 60
 
     def __init__(self, mqtt_client):
