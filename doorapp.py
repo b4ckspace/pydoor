@@ -58,7 +58,7 @@ class DoorDriver:
     def __init__(self, mqtt_client):
         self._mqtt_client = mqtt_client
         self._is_running = False
-        self._next_door_close_shutdown = False
+        self._shutdown_timer = 0
         self._gpio_unlock = DigitalOutputDevice(23, active_high=False, initial_value=False)
         self._gpio_lock = DigitalOutputDevice(24, active_high=False, initial_value=False)
         self._buzzer = DigitalOutputDevice(25, active_high=True, initial_value=False)
@@ -72,6 +72,7 @@ class DoorDriver:
         self._door_frame.when_released = self._door_opened
         self._door_bolt.when_pressed = self._door_locked
         self._door_bolt.when_released = self._door_unlocked
+        self._last_command_time = time.monotonic()
 
     @property
     def is_open(self):
@@ -117,7 +118,12 @@ class DoorDriver:
         the queue was empty in between. This behavior is intended.
         :return:
         """
-        command = self._command_queue.get()
+        timeout = 10
+        try:
+            command = self._command_queue.get(timeout=timeout)
+            self._last_command_time = time.monotonic()
+        except queue.Empty:
+            return self._nop
         operation_fn = {
             DoorOperation.LOCK: self._lock_door,
             DoorOperation.UNLOCK: self._unlock_door,
