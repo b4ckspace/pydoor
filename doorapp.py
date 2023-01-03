@@ -165,7 +165,6 @@ class DoorDriver:
             self._lock_door()
 
     def _button_pressed(self):
-        print('Button was pressed', file=sys.stderr)
         self._mqtt_client.publish('sensor/door/button', 'pressed')
         if self.is_unlocked:
             self._shutdown_timer = time.monotonic()
@@ -173,15 +172,12 @@ class DoorDriver:
             self.unlock()
 
     def _button_released(self):
-        print('Button was released', file=sys.stderr)
         self._mqtt_client.publish('sensor/door/button', 'released')
 
     def _door_opened(self):
-        print('Door opened', file=sys.stderr)
         self._mqtt_client.publish('sensor/door/frame', 'open')
 
     def _door_closed(self):
-        print('Door closed', file=sys.stderr)
         self._mqtt_client.publish('sensor/door/frame', 'closed')
         if self._shutdown_timer > 0:
             seconds_passed = time.monotonic() - self._shutdown_timer
@@ -190,11 +186,9 @@ class DoorDriver:
                 self.lock_shutdown()
 
     def _door_locked(self):
-        print('Door locked', file=sys.stderr)
         self._mqtt_client.publish('sensor/door/lock', 'closed')
 
     def _door_unlocked(self):
-        print('Door unlocked', file=sys.stderr)
         self._mqtt_client.publish('sensor/door/lock', 'open')
 
     def _log_command(self, command):
