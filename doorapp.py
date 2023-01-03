@@ -94,7 +94,7 @@ class DoorDriver:
         self._queue_operation(DoorOperation.LOCK, who, force)
 
     def lock_shutdown(self):
-        self._queue_operation(DoorOperation.LOCK, who=None, force=True)
+        self._queue_operation(DoorOperation.LOCK_SHUTDOWN, who=None, force=True)
 
     def unlock(self, who=None, force=False):
         self._queue_operation(DoorOperation.UNLOCK, who, force)
