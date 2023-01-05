@@ -54,6 +54,7 @@ class QueueCommand:
 
 class DoorDriver:
     BUTTON_SHUTDOWN_LOCK_TIME = 60
+    ZERO_MEMBER_PRESENT_SHUTDOWN_TIMEOUT = 15 * 60
 
     def __init__(self, mqtt_client):
         self._mqtt_client = mqtt_client
@@ -73,6 +74,9 @@ class DoorDriver:
         self._door_bolt.when_pressed = self._door_locked
         self._door_bolt.when_released = self._door_unlocked
         self._last_command_time = time.monotonic()
+        self._zero_member_present_time = 0
+        self._mqtt_client.on_connect = self._on_mqtt_connect
+        self._mqtt_client.on_message = self._on_mqtt_message
 
     @property
     def is_open(self):
@@ -123,6 +127,10 @@ class DoorDriver:
             command = self._command_queue.get(timeout=timeout)
             self._last_command_time = time.monotonic()
         except queue.Empty:
+            if self._zero_member_present_time > 0:
+                time_passed = time.monotonic() - self._zero_member_present_time
+                if time_passed > self.ZERO_MEMBER_PRESENT_SHUTDOWN_TIMEOUT:
+                    return self._lock_door_emergency()
             return self._nop
         operation_fn = {
             DoorOperation.LOCK: self._lock_door,
@@ -164,6 +172,12 @@ class DoorDriver:
         if self.is_closed:
             self._lock_door()
 
+    def _lock_door_emergency(self):
+        if not self._door_bolt.is_pressed and self._door_frame.is_pressed:
+            self._mqtt_client.publish('psa/alarm', 'Notfallabschliessung der Tuer!')
+            self._lock_door()
+            self._zero_member_present_time = 0
+
     def _button_pressed(self):
         self._mqtt_client.publish('sensor/door/button', 'pressed')
         if self.is_unlocked:
@@ -195,6 +209,19 @@ class DoorDriver:
         who = command.who
         now = datetime.utcnow()
         print(f'{now}: {command.operation.name} (user: {who})', file=sys.stderr)
+
+    def _on_mqtt_connect(self, client, userdata, flags, rc):
+        client.subscribe('sensor/space/member/present', 0)
+
+    def _on_mqtt_message(self, client, userdata, message):
+        try:
+            member_count = int(message, 10)
+        except ValueError:
+            return
+        if member_count == 0:
+            self._zero_member_present_time = time.monotonic()
+        else:
+            self._zero_member_present_time = 0
 
 
 def get_door_app_environ(start=True):
