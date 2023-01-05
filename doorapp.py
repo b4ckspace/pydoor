@@ -130,7 +130,7 @@ class DoorDriver:
             if self._zero_member_present_time > 0:
                 time_passed = time.monotonic() - self._zero_member_present_time
                 if time_passed > self.ZERO_MEMBER_PRESENT_SHUTDOWN_TIMEOUT:
-                    return self._lock_door_emergency()
+                    return self._lock_door_emergency
             return self._nop
         operation_fn = {
             DoorOperation.LOCK: self._lock_door,
@@ -215,7 +215,7 @@ class DoorDriver:
 
     def _on_mqtt_message(self, client, userdata, message):
         try:
-            member_count = int(message, 10)
+            member_count = int(message.payload, 10)
         except ValueError:
             return
         if member_count == 0:
