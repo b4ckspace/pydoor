@@ -4,8 +4,8 @@ Description=pydoor
 After=network.target
 
 [Service]
-User=pi
-Group=pi
+User=door
+Group=door
 WorkingDirectory=/opt/pydoor
 EnvironmentFile=/etc/default/pydoor.env
 Environment=VIRTUAL_ENV="/opt/pydoor/venv"
