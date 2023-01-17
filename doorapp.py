@@ -183,6 +183,7 @@ class DoorDriver:
         if self.is_unlocked:
             self._shutdown_timer = time.monotonic()
         else:
+            self._zero_member_present_time = 0
             self.unlock()
 
     def _button_released(self):
