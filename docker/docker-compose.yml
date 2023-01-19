@@ -1,0 +1,42 @@
+---
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    depends_on:
+      - ldap
+      - mqtt
+    volumes:
+      - ..:/opt/pydoor
+    env_file:
+      - .env
+
+  web:
+    image: nginx:1.23-alpine
+    depends_on:
+      - app
+    ports:
+      - 127.0.0.1:8080:80
+    volumes:
+      - ./default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../static:/usr/share/nginx/html:ro
+
+  ldap:
+    image: nitnelave/lldap:v0.4.1-alpine
+    ports:
+      # Web interface
+      - 127.0.0.1:17170:17170
+    environment:
+      - LLDAP_JWT_SECRET=Ey8OsmUqZCRJKsrl6Dkci3Rv3UbvJZkT
+      - LLDAP_LDAP_USER_PASS=password
+      - LLDAP_LDAP_BASE_DN=dc=backspace
+      - LLDAP_LDAPS_OPTIONS__ENABLED=true
+      - LLDAP_LDAPS_OPTIONS__CERT_FILE=/data/cert.pem
+      - LLDAP_LDAPS_OPTIONS__KEY_FILE=/data/key.pem
+    volumes:
+      - ./lldap_data:/data
+
+  mqtt:
+    image: eclipse-mosquitto:2.0

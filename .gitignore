@@ -1,3 +1,8 @@
+# Project specific
+docker/.env
+docker/*.pem
+docker/lldap_data/
+
 # Python
 __pycache__/
 .py[cod]
