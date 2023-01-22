@@ -35,6 +35,7 @@ class DoorApp:
         self._mqtt_client.loop_stop()
 
     def _shutdown(self, signo, sigframe):
+        print(f'DoorApp shutting down', file=sys.stderr)
         self.stop()
 
 
@@ -153,6 +154,7 @@ class DoorDriver:
         self._is_running = False
 
     def _unlock_door(self):
+        self._zero_member_present_time = 0
         self._buzzer.on()
         self._gpio_unlock.on()
         time.sleep(0.2)
@@ -173,7 +175,7 @@ class DoorDriver:
             self._lock_door()
 
     def _lock_door_emergency(self):
-        if not self._door_bolt.is_pressed and self._door_frame.is_pressed:
+        if not self.is_locked and self.is_closed:
             self._mqtt_client.publish('psa/alarm', 'Notfallabschliessung der Tuer!')
             self._lock_door()
             self._zero_member_present_time = 0
@@ -183,7 +185,6 @@ class DoorDriver:
         if self.is_unlocked:
             self._shutdown_timer = time.monotonic()
         else:
-            self._zero_member_present_time = 0
             self.unlock()
 
     def _button_released(self):
@@ -214,7 +215,7 @@ class DoorDriver:
     def _on_mqtt_connect(self, client, userdata, flags, rc):
         client.subscribe('sensor/space/member/present', 0)
 
-    def _on_mqtt_message(self, client, userdata, message):
+    def _on_mqtt_message(self, client, userdata, message: mqtt.MQTTMessage):
         try:
             member_count = int(message.payload, 10)
         except ValueError:
