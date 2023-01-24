@@ -176,6 +176,8 @@ class DoorDriver:
 
     def _lock_door_emergency(self):
         if not self.is_locked and self.is_closed:
+            now = datetime.utcnow()
+            print(f'{now}: EMERGENCY LOCK', file=sys.stderr)
             self._mqtt_client.publish('psa/alarm', 'Notfallabschliessung der Tuer!')
             self._lock_door()
             self._zero_member_present_time = 0
