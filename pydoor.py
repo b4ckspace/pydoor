@@ -10,8 +10,11 @@ door_app = get_door_app_environ(start=True)
 authenticator = get_authenticator_environ()
 
 
-@app.route('/operate', methods=['POST'])
+@app.route('/operate', methods=['GET', 'POST'])
 def operate():
+    if request.method == 'GET':
+        return redirect('/')
+
     uid = request.form.get('uid', '')
     password = request.form.get('password', '')
     if not authenticator.check_credentials(uid, password):
