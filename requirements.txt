@@ -3,10 +3,13 @@ colorzero==2.0
 Flask==2.2.2
 gpiozero==1.6.2
 gunicorn==20.1.0
+importlib-metadata==6.0.0
 itsdangerous==2.1.2
 Jinja2==3.1.2
 ldap3==2.9.1
 MarkupSafe==2.1.1
 paho-mqtt==1.6.1
 pyasn1==0.4.8
+RPi.GPIO==0.7.1
 Werkzeug==2.2.2
+zipp==3.11.0
