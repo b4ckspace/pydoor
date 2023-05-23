@@ -1,4 +1,6 @@
 import logging
+import sys
+from datetime import datetime
 
 from doorapp import get_door_app_environ
 from authentication import get_authenticator_environ
@@ -18,6 +20,8 @@ def operate():
     uid = request.form.get('uid', '')
     password = request.form.get('password', '')
     if not authenticator.check_credentials(uid, password):
+        now = datetime.utcnow()
+        print(f'{now}: Authentication failed (user: {uid})', file=sys.stderr)
         return redirect("/unauthorized.html")
 
     action = request.form.get('type', '').lower()
