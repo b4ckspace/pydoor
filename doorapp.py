@@ -159,7 +159,7 @@ class DoorDriver:
         self._gpio_unlock.on()
         time.sleep(0.2)
         self._gpio_unlock.off()
-        time.sleep(5)
+        time.sleep(10)
         self._buzzer.off()
 
     def _lock_door(self):
