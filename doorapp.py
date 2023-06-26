@@ -55,7 +55,7 @@ class QueueCommand:
 
 class DoorDriver:
     BUTTON_SHUTDOWN_LOCK_TIME = 60
-    ZERO_MEMBER_PRESENT_SHUTDOWN_TIMEOUT = 15 * 60
+    ZERO_MEMBER_PRESENT_SHUTDOWN_TIMEOUT = 30 * 60
 
     def __init__(self, mqtt_client):
         self._mqtt_client = mqtt_client
