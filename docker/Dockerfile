@@ -1,10 +1,18 @@
-FROM python:3.9-alpine
+FROM python:3.12-alpine AS build
+RUN apk add build-base
+RUN python3 -m venv /build
+WORKDIR /build
+RUN /build/bin/pip wheel RPi.GPIO==0.7.1
+
+FROM python:3.12-alpine
 
 RUN adduser --home /opt/pydoor --disabled-password pydoor
+# RUN mkdir /wheels
 
 WORKDIR /opt/pydoor
 
 COPY . ./
+RUN --mount=type=bind,from=build,source=/build,target=/wheels pip install /wheels/*.whl
 RUN pip install --no-cache-dir -r requirements.txt
 
 USER pydoor
