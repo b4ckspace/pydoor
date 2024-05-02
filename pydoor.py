@@ -1,6 +1,6 @@
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, UTC
 
 from doorapp import get_door_app_environ
 from authentication import get_authenticator_environ
@@ -12,30 +12,32 @@ door_app = get_door_app_environ(start=True)
 authenticator = get_authenticator_environ()
 
 
-@app.route('/operate', methods=['GET', 'POST'])
+@app.route("/operate", methods=["GET", "POST"])
 def operate():
-    if request.method == 'GET':
-        return redirect('/')
+    if request.method == "GET":
+        return redirect("/")
 
-    uid = request.form.get('uid', '')
-    password = request.form.get('password', '')
+    uid = request.form.get("uid", "")
+    password = request.form.get("password", "")
     if not authenticator.check_credentials(uid, password):
-        now = datetime.utcnow()
-        print(f'{now}: Authentication failed (user: {uid})', file=sys.stderr)
+        now = datetime.now(UTC)
+        print(f"{now}: Authentication failed (user: {uid})", file=sys.stderr)
         return redirect("/unauthorized.html")
 
-    action = request.form.get('type', '').lower()
-    if action == 'open':
+    action = request.form.get("type", "").lower()
+    if action == "open":
         door_app.door_driver.unlock(uid)
-        return redirect('/opened.html')
-    elif action == 'close':
+        return redirect("/opened.html")
+    elif action == "close":
         door_app.door_driver.lock(uid)
-        return redirect('/closed.html')
+        return redirect("/closed.html")
+
+    return "Invalid request", 400
 
 
 def main():
     app.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

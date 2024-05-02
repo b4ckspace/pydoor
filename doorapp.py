@@ -31,11 +31,12 @@ class DoorApp:
 
     def stop(self):
         self.door_driver.stop()
-        self._door_driver_thread.join()
+        if self._door_driver_thread:
+            self._door_driver_thread.join()
         self._mqtt_client.loop_stop()
 
     def _shutdown(self, signo, sigframe):
-        print(f'DoorApp shutting down', file=sys.stderr)
+        print("DoorApp shutting down", file=sys.stderr)
         self.stop()
 
 
@@ -61,12 +62,20 @@ class DoorDriver:
         self._mqtt_client = mqtt_client
         self._is_running = False
         self._shutdown_timer = 0
-        self._gpio_unlock = DigitalOutputDevice(23, active_high=False, initial_value=False)
-        self._gpio_lock = DigitalOutputDevice(24, active_high=False, initial_value=False)
+        self._gpio_unlock = DigitalOutputDevice(
+            23, active_high=False, initial_value=False
+        )
+        self._gpio_lock = DigitalOutputDevice(
+            24, active_high=False, initial_value=False
+        )
         self._buzzer = DigitalOutputDevice(25, active_high=True, initial_value=False)
-        self._button = Button(17, pull_up=None, active_state=False, bounce_time=0.01)
-        self._door_frame = Button(22, pull_up=None, active_state=False, bounce_time=0.01)
-        self._door_bolt = Button(27, pull_up=None, active_state=False, bounce_time=0.01)
+        self._button = Button(17, pull_up=False, active_state=False, bounce_time=0.01)
+        self._door_frame = Button(
+            22, pull_up=False, active_state=False, bounce_time=0.01
+        )
+        self._door_bolt = Button(
+            27, pull_up=False, active_state=False, bounce_time=0.01
+        )
         self._command_queue = queue.SimpleQueue()
         self._button.when_pressed = self._button_pressed
         self._button.when_released = self._button_released
@@ -114,7 +123,7 @@ class DoorDriver:
             operation_fn()
 
     def _process_queue(self):
-        """ Processes queue entries for door operations
+        """Processes queue entries for door operations
 
         This function will *NOT* execute commands immediately, but take the
         last command in the queue unless the command is forced. This prevents
@@ -137,7 +146,7 @@ class DoorDriver:
             DoorOperation.LOCK: self._lock_door,
             DoorOperation.UNLOCK: self._unlock_door,
             DoorOperation.LOCK_SHUTDOWN: self._lock_door_shutdown,
-            DoorOperation.STOP: self._stop
+            DoorOperation.STOP: self._stop,
         }[command.operation]
         self._log_command(command)
         if self._command_queue.empty() or command.force:
@@ -177,26 +186,26 @@ class DoorDriver:
     def _lock_door_emergency(self):
         if not self.is_locked and self.is_closed:
             now = datetime.utcnow()
-            print(f'{now}: EMERGENCY LOCK', file=sys.stderr)
-            self._mqtt_client.publish('psa/alarm', 'Notfallabschliessung der Tuer!')
+            print(f"{now}: EMERGENCY LOCK", file=sys.stderr)
+            self._mqtt_client.publish("psa/alarm", "Notfallabschliessung der Tuer!")
             self._lock_door()
             self._zero_member_present_time = 0
 
     def _button_pressed(self):
-        self._mqtt_client.publish('sensor/door/button', 'pressed')
+        self._mqtt_client.publish("sensor/door/button", "pressed")
         if self.is_unlocked:
             self._shutdown_timer = time.monotonic()
         else:
             self.unlock()
 
     def _button_released(self):
-        self._mqtt_client.publish('sensor/door/button', 'released')
+        self._mqtt_client.publish("sensor/door/button", "released")
 
     def _door_opened(self):
-        self._mqtt_client.publish('sensor/door/frame', 'open')
+        self._mqtt_client.publish("sensor/door/frame", "open")
 
     def _door_closed(self):
-        self._mqtt_client.publish('sensor/door/frame', 'closed')
+        self._mqtt_client.publish("sensor/door/frame", "closed")
         if self._shutdown_timer > 0:
             seconds_passed = time.monotonic() - self._shutdown_timer
             self._shutdown_timer = 0
@@ -204,18 +213,18 @@ class DoorDriver:
                 self.lock_shutdown()
 
     def _door_locked(self):
-        self._mqtt_client.publish('sensor/door/lock', 'closed')
+        self._mqtt_client.publish("sensor/door/lock", "closed")
 
     def _door_unlocked(self):
-        self._mqtt_client.publish('sensor/door/lock', 'open')
+        self._mqtt_client.publish("sensor/door/lock", "open")
 
     def _log_command(self, command):
         who = command.who
         now = datetime.utcnow()
-        print(f'{now}: {command.operation.name} (user: {who})', file=sys.stderr)
+        print(f"{now}: {command.operation.name} (user: {who})", file=sys.stderr)
 
     def _on_mqtt_connect(self, client, userdata, flags, rc):
-        client.subscribe('sensor/space/member/present', 0)
+        client.subscribe("sensor/space/member/present", 0)
 
     def _on_mqtt_message(self, client, userdata, message: mqtt.MQTTMessage):
         try:
@@ -229,7 +238,7 @@ class DoorDriver:
 
 
 def get_door_app_environ(start=True):
-    mqtt_host = os.environ.get('PYDOOR_MQTT_HOST', 'mqtt.core.bckspc.de')
+    mqtt_host = os.environ.get("PYDOOR_MQTT_HOST", "mqtt.core.bckspc.de")
     door_app = DoorApp(mqtt_host)
     if start:
         door_app.start()
