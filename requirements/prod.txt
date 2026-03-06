@@ -1,0 +1,2 @@
+-r common.txt
+RPi.GPIO==0.7.1
