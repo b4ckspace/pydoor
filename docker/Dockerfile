@@ -5,7 +5,7 @@ RUN adduser --home /opt/pydoor --disabled-password pydoor
 WORKDIR /opt/pydoor
 
 COPY . ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN apk add git && pip install --no-cache-dir -r requirements/dev.txt
 
 USER pydoor
 

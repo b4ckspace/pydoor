@@ -4,17 +4,12 @@ import hmac
 import logging
 import os
 import re
-import ssl
-
-from ldap3 import Tls, Server, Connection
-from ldap3.core.exceptions import LDAPException
-from ldap3.utils.conv import escape_filter_chars
 
 
 logger = logging.getLogger(__name__)
 
 
-class LdapAuthenticator:
+class ShadowFileAuthenticator:
     HASH_ALGOS = {
         'md5': hashlib.md5,
         'sha': hashlib.sha1,
@@ -23,42 +18,29 @@ class LdapAuthenticator:
         'sha512': hashlib.sha512
     }
 
-    def __init__(self, ldap_host, ldap_dn, ldap_password, ldap_search,
-                 ldap_filter, ldap_password_attribute):
-        self._ldap_host = ldap_host
-        self._ldap_dn = ldap_dn
-        self._ldap_password = ldap_password
-        self._ldap_search = ldap_search
-        self._ldap_filter = ldap_filter
-        self._ldap_password_attribute = ldap_password_attribute
+    def __init__(self, shadow_file):
+        if not os.path.exists(shadow_file):
+            raise FileNotFoundError(f'File does not exist: {shadow_file}')
+
+        if not os.access(shadow_file, os.R_OK):
+            raise PermissionError (f'Cannot read shadow file: {shadow_file}')
+
+        self._shadow_file = shadow_file
 
     def check_credentials(self, username, password):
-        try:
-            return self._check_credentials_internal(username, password)
-        except LDAPException as e:
-            logger.warning(f'Unexpected LDAP error: {e}')
-        return False
+        with open(self._shadow_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
 
-    def _check_credentials_internal(self, username, password):
-        tls_config = Tls(validate=ssl.CERT_NONE)
-        server = Server(self._ldap_host, tls=tls_config)
-        with Connection(server, self._ldap_dn, self._ldap_password) as conn:
-            conn.start_tls()
-            conn.bind()
-            username_escaped = escape_filter_chars(username, 'utf-8')
-            result = conn.search(
-                self._ldap_search,
-                self._ldap_filter.format(username=username_escaped),
-                attributes=[self._ldap_password_attribute]
-            )
-            if not result:
-                return False
-            entry = conn.entries[0]
-            door_password = getattr(entry, self._ldap_password_attribute)
-            if not door_password:
-                return False
-            door_password_hash = str(door_password)
-        return self._check_password_hash(password, door_password_hash)
+                if not line:
+                    continue
+
+                user, _, password_hash = line.partition(':')
+
+                if user == username:
+                    return self._check_password_hash(password, password_hash)
+
+        return False
 
     def _check_password_hash(self, password, password_hash):
         algo_options = '|'.join(self.HASH_ALGOS.keys())
@@ -81,11 +63,6 @@ class LdapAuthenticator:
 
 
 def get_authenticator_environ():
-    return LdapAuthenticator(
-        os.environ.get('PYDOOR_LDAP_HOST', 'ldap://10.1.20.13:389'),
-        os.environ.get('PYDOOR_LDAP_DN', 'cn=reader,ou=ldapuser,dc=backspace'),
-        os.environ.get('PYDOOR_LDAP_PASSWORD', ''),
-        os.environ.get('PYDOOR_LDAP_SEARCH', 'ou=member,dc=backspace'),
-        os.environ.get('PYDOOR_LDAP_FILTER', '(&(objectClass=backspaceMember)(serviceEnabled=door)(uid={username}))'),
-        os.environ.get('PYDOOR_LDAP_PASSWORD_ATTRIBUTE', 'doorPassword')
+    return ShadowFileAuthenticator(
+        shadow_file=os.environ.get('PYDOOR_SHADOW_FILE', '/etc/pydoor/shadow')
     )
